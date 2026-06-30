@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NotPetya / FedEx — Incident Timeline</title>
+<style>
+  :root{
+    --bg: #0b0e0c;
+    --panel: #11150f;
+    --line: #2a3128;
+    --amber: #ffb000;
+    --amber-dim: #8a6300;
+    --green: #5fd97a;
+    --text: #e8ebe2;
+    --text-dim: #9aa195;
+    --red: #ff5d4e;
+  }
+  *{box-sizing:border-box;}
+  html{font-size:18px;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);}
+  body{
+    font-family: 'IBM Plex Mono','Courier New',monospace;
+    -webkit-font-smoothing:antialiased;
+    font-size:1rem;
+    line-height:1.5;
+  }
+  ::selection{background:var(--amber);color:#000;}
+
+  /* scanline texture */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+    pointer-events:none;
+    z-index:50;
+  }
+
+  header{
+    border-bottom:1px solid var(--line);
+    padding:32px 32px 26px;
+    position:sticky; top:0;
+    background:rgba(11,14,12,0.96);
+    backdrop-filter:blur(6px);
+    z-index:40;
+  }
+  .hdr-top{
+    display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;
+    max-width:1200px; margin:0 auto;
+  }
+  .brand{
+    font-size:14px; letter-spacing:3px; color:var(--text-dim); text-transform:uppercase;
+  }
+  .brand b{color:var(--green);}
+  .clock{font-size:14px; color:var(--text-dim); letter-spacing:1px;}
+  h1{
+    max-width:1200px; margin:18px auto 8px;
+    font-size:clamp(30px,4.6vw,46px);
+    font-weight:700; letter-spacing:-0.5px; color:#fff;
+    line-height:1.15;
+  }
+  h1 span{color:var(--amber);}
+  .subhead{
+    max-width:1200px; margin:0 auto; color:var(--text-dim); font-size:17px; line-height:1.65; max-width:900px;
+  }
+
+  /* filter bar */
+  .filters{
+    max-width:1200px; margin:22px auto 0; display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .chip{
+    border:1.5px solid var(--line); background:transparent; color:var(--text-dim);
+    font-family:inherit; font-size:14px; letter-spacing:1px; text-transform:uppercase;
+    padding:9px 16px; cursor:pointer; transition:all .15s ease; border-radius:3px;
+  }
+  .chip:hover{border-color:var(--amber-dim); color:var(--text);}
+  .chip.active{background:var(--amber); border-color:var(--amber); color:#000; font-weight:700;}
+
+  main{max-width:1200px; margin:0 auto; padding:50px 32px 140px; position:relative;}
+
+  /* timeline spine */
+  .spine{
+    position:absolute; left:28px; top:50px; bottom:140px; width:2px;
+    background:linear-gradient(180deg, var(--line) 0%, var(--line) 100%);
+  }
+  @media (min-width:640px){
+    .spine{left:150px;}
+  }
+
+  .day-marker{
+    position:relative; margin:58px 0 22px;
+    padding-left:56px;
+  }
+  @media (min-width:640px){ .day-marker{padding-left:178px;} }
+  .day-marker:first-child{margin-top:0;}
+  .day-marker .day-label{
+    font-size:18px; color:#000; background:var(--amber); display:inline-block;
+    padding:6px 14px; letter-spacing:1px; font-weight:800; border-radius:3px;
+  }
+  .day-marker .day-sub{display:block; color:var(--text-dim); font-size:14px; margin-top:8px; letter-spacing:.5px;}
+  .day-dot{
+    position:absolute; left:24px; top:4px; width:13px; height:13px; border-radius:50%;
+    background:var(--amber); box-shadow:0 0 0 5px var(--bg), 0 0 14px var(--amber);
+  }
+  @media (min-width:640px){ .day-dot{left:146px;} }
+
+  .event{
+    position:relative; padding-left:56px; margin-bottom:4px;
+  }
+  @media (min-width:640px){ .event{padding-left:0; display:grid; grid-template-columns:128px 1fr; gap:0;} }
+
+  .event-time{
+    display:none;
+  }
+  @media (min-width:640px){
+    .event-time{
+      display:block; text-align:right; padding-right:24px; font-size:14px; color:var(--text-dim);
+      padding-top:18px; letter-spacing:.5px; font-weight:600;
+    }
+  }
+
+  .event-dot{
+    position:absolute; left:25px; top:22px; width:10px; height:10px; border-radius:50%;
+    background:var(--line); border:2px solid var(--text-dim);
+  }
+  @media (min-width:640px){ .event-dot{left:147px;} }
+  .event[data-tag="attack"] .event-dot{background:var(--red); border-color:var(--red);}
+  .event[data-tag="response"] .event-dot{background:var(--green); border-color:var(--green);}
+  .event[data-tag="business"] .event-dot{background:var(--amber); border-color:var(--amber);}
+  .event[data-tag="human"] .event-dot{background:#7da8ff; border-color:#7da8ff;}
+
+  .event-card{
+    border:1.5px solid var(--line);
+    background:var(--panel);
+    margin:0 0 14px 16px;
+    padding:18px 22px;
+    border-radius:4px;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  @media (min-width:640px){ .event-card{margin:0 0 14px 24px;} }
+  .event-card:hover{border-color:var(--amber-dim); background:#141810;}
+
+  .event-time-mobile{
+    display:block; font-size:14px; color:var(--amber); margin-bottom:8px; letter-spacing:.5px; font-weight:700;
+  }
+  @media (min-width:640px){ .event-time-mobile{display:none;} }
+
+  .event-head{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:14px;
+  }
+  .event-title{font-size:19px; color:#fff; font-weight:700; line-height:1.45;}
+  .tag-badge{
+    font-size:12px; letter-spacing:1px; text-transform:uppercase; padding:4px 10px;
+    border-radius:12px; white-space:nowrap; margin-top:2px; flex-shrink:0; font-weight:700;
+  }
+  .event[data-tag="attack"] .tag-badge{color:var(--red); border:1.5px solid var(--red);}
+  .event[data-tag="response"] .tag-badge{color:var(--green); border:1.5px solid var(--green);}
+  .event[data-tag="business"] .tag-badge{color:var(--amber); border:1.5px solid var(--amber);}
+  .event[data-tag="human"] .tag-badge{color:#7da8ff; border:1.5px solid #7da8ff;}
+
+  .event-body{
+    font-size:16px; color:var(--text-dim); line-height:1.7; margin-top:0; max-height:0; overflow:hidden;
+    transition:max-height .25s ease, margin-top .25s ease;
+  }
+  .event-card.open .event-body{margin-top:14px;}
+  .event-quote{
+    color:var(--text); border-left:3px solid var(--amber-dim); padding-left:14px; margin-top:12px; font-style:italic;
+    font-size:16px;
+  }
+  .event-quote cite{display:block; font-style:normal; color:var(--text-dim); font-size:13px; margin-top:6px;}
+
+  .expand-hint{font-size:12px; color:var(--text-dim); margin-top:10px; letter-spacing:.5px;}
+  .event-card.open .expand-hint{display:none;}
+
+  footer{
+    border-top:1px solid var(--line); padding:30px 24px; text-align:center;
+    color:var(--text-dim); font-size:13px; letter-spacing:.5px;
+  }
+
+  .hidden{display:none !important;}
+
+  /* legend */
+  .legend{display:flex; gap:18px; flex-wrap:wrap; margin-top:16px;}
+  .legend span{font-size:14px; color:var(--text-dim); display:flex; align-items:center; gap:7px; letter-spacing:.5px;}
+  .legend i{width:10px; height:10px; border-radius:50%; display:inline-block;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-top">
+    <div class="brand">FEDEX — <b>CYBER INCIDENT RESPONSE LOG</b></div>
+    <div class="clock" id="clock"></div>
+  </div>
+  <h1>NotPetya Storm: <span>72 Hours, One Summer</span></h1>
+  <p class="subhead">A reconstructed timeline of the June 27, 2017 cyberattack on TNT Express and FedEx's response — from first alert to the long restoration campaign that followed. Based on HBS Case 9-625-049.</p>
+
+  <div class="legend">
+    <span><i style="background:var(--red)"></i> Attack &amp; spread</span>
+    <span><i style="background:var(--green)"></i> Response &amp; recovery</span>
+    <span><i style="background:var(--amber)"></i> Business / disclosure</span>
+    <span><i style="background:#7da8ff"></i> Human impact</span>
+  </div>
+
+  <div class="filters" id="filters">
+    <button class="chip active" data-filter="all">All events</button>
+    <button class="chip" data-filter="attack">Attack</button>
+    <button class="chip" data-filter="response">Response</button>
+    <button class="chip" data-filter="business">Business</button>
+    <button class="chip" data-filter="human">Human</button>
+  </div>
+</header>
+
+<main>
+  <div class="spine"></div>
+  <div id="timeline"></div>
+</main>
+
+<footer>
+  Source: Gibson, Nagle, Dadlani &amp; Hostetter, "FedEx Cyberattack (A): Navigating the NotPetya Storm," Harvard Business School Case 9-625-049 (Nov 27, 2024). Timeline reconstructed from case narrative for educational use.
+</footer>
+
+<script>
+const DATA = [
+  {
+    day: "Background", sub: "May 2016 — early origins of the exposure",
+    events: [
+      {time:"May 2016", tag:"business", title:"FedEx acquires TNT Express for $4.9B", body:"FedEx's largest-ever acquisition gives it a European road network and over 56,000 new employees serving 200 countries — but also inherits TNT's older, less-secure IT environment.", quote:"\"Acquisitions are dangerous from a cyber standpoint; you're only as strong as your weakest link.\"", cite:"Rob Carter, CIO"},
+      {time:"Pre-2017", tag:"attack", title:"TNT's tech debt accumulates", body:"Following revenue declines during the late-2000s economic crisis, TNT delayed technology upgrades. By 2017 it was still backing up data to magnetic tape — offline and safe from malware, but far too slow for rapid, parallel restoration. Thousands of TNT staff also held privileged system-administrator access (versus just eight at FedEx)."}
+    ]
+  },
+  {
+    day: "Tue, June 27, 2017", sub: "Day 1 — the attack launches",
+    events: [
+      {time:"~8:00 AM EDT", tag:"attack", title:"First alert reaches Memphis HQ", body:"Gene Sun, VP of global network &amp; communication services, gets a frantic call from a New York field office: TNT computer systems across Europe are frozen, screens displaying a ransom note demanding $300 in Bitcoin.", quote:"\"He told me all the TNT computer systems were down and the screens were frozen... my heart sank.\"", cite:"Gene Sun"},
+      {time:"Morning", tag:"attack", title:"CIO Rob Carter is briefed, doesn't yet grasp the scale", body:"Carter receives an urgent call describing what looks like a cyberattack. Having weathered prior attacks within a day or two, he initially underestimates the severity.", quote:"\"At first, I didn't understand the severity of the situation... we'd had attacks before and usually dug our way out within a day or two.\"", cite:"Rob Carter, CIO"},
+      {time:"Morning", tag:"attack", title:"Atherstone, England data center overwhelmed", body:"Paul Beardmore, managing director of IT infrastructure, watches every monitor screen in the Oxford/Cambridge region display the ransom note simultaneously. The attack is being reported live on Sky News before FedEx can even assess it internally.", quote:"\"It was like a film. Every screen came up with the ransom note, and there were reports of systems going down all over.\"", cite:"Paul Beardmore"},
+      {time:"Within 6 minutes", tag:"attack", title:"Every Microsoft server in TNT's data center is bricked", body:"Staff race to physically unplug power cables, but the malware moves faster than humans can react."},
+      {time:"Within 40 minutes", tag:"attack", title:"Entire global TNT network is down", body:"Every Microsoft client connected to the TNT network worldwide is bricked. Roughly 40,000 computers and 10,000 servers become completely inoperable — nearly all of TNT's operating systems, which moved over a million packages a day across Europe, Asia, the Americas, the Middle East, and Africa."},
+      {time:"Early morning", tag:"response", title:"Cyber Incident Response Team (CIRT) stands up", body:"Following the first step of FedEx's pre-built business continuity disaster recovery (BCDR) plan for cyberattacks, roughly 40 people convene in a secure 'command bunker' in Memphis, some joining remotely. Their first task: cut through the fog of war.", quote:"\"Nobody had perfect information. A lot of the information at the beginning was not accurate. It was chaotic. But communication was still key.\"", cite:"Gene Sun"},
+      {time:"Throughout the day", tag:"response", title:"FedEx severs links between TNT and the rest of FedEx", body:"With a firewall already in place between the still-integrating TNT and FedEx systems, IT leadership cuts email and other links entirely to protect the broader 'mother ship.' Memphis's superhub power-down is considered but not executed.", quote:"\"We hit the big red button. We didn't know what we were dealing with, and whether that worm was hidden from us.\"", cite:"Kevin Humphries, SVP IT Operations"},
+      {time:"During the day", tag:"response", title:"CIRT reaches out to Microsoft and the U.S. government", body:"Microsoft is contacted for technical guidance since NotPetya targeted Windows. Little useful information comes back from the Department of Homeland Security — the Cybersecurity and Infrastructure Security Agency did not yet exist."},
+      {time:"Daytime", tag:"business", title:"Executive team convenes", body:"Founder/CEO Fred Smith meets with Carter, CISO Denise Wood, communications officer Mike Glenn, and CFO Alan Graf. Some estimate recovery could take a month or more; Graf raises the possibility this is a 'material' event requiring SEC disclosure.", quote:"\"Rob was very direct and told me this was a big deal... I saw my role at the time to be as supportive as I could be to Rob and his team.\"", cite:"Fred Smith, founder &amp; CEO"},
+      {time:"Daytime", tag:"human", title:"Leadership steps back to give IT room to work", body:"As directors flood the help desk for status updates, IT staff ask the executive team for space to focus entirely on the response.", quote:"\"They gave us the freedom to do what was necessary to save the company.\"", cite:"Kevin Humphries"}
+    ]
+  },
+  {
+    day: "Wed, June 28, 2017", sub: "Day 2 — disclosure and deployment",
+    events: [
+      {time:"Morning", tag:"business", title:"FedEx files Form 8-K and requests trading suspension", body:"The executive team decides to disclose the next day, filing an SEC Form 8-K and requesting a 50-minute suspension of FDX trading on the NYSE while a statement is prepared. The stock shows no significant movement that week — opening at $216.19 and closing at $217.15."},
+      {time:"Morning", tag:"business", title:"Public statement issued", body:"Press release: \"While TNT Express operations and communications systems have been disrupted, no data breach is known to have occurred. The operations of all other FedEx companies are unaffected... We cannot measure the financial impact of this service disruption at this time, but it could be material.\""},
+      {time:"Early morning", tag:"response", title:"~40-person IT team flies from Memphis to England", body:"The team arrives at the Atherstone data center to find thousands of destroyed systems, only paper-based network diagrams, and a handful of files surviving on laptops that happened to be disconnected at the time of the attack. Even phone systems are destroyed — staff switch to WhatsApp."},
+      {time:"On arrival", tag:"response", title:"War room established at Atherstone", body:"Don Fike, VP of enterprise architecture, sets up a command-and-control structure after finding European tech support dangerously decentralized, with business leaders bypassing process to demand fixes directly from infrastructure staff.", quote:"\"Business leaders were going directly to infrastructure people saying, 'restore this, restore this,' and there was a lot of confusion. Everyone thought their system was the most important.\"", cite:"Don Fike"},
+      {time:"Ongoing", tag:"response", title:"Daily priority-setting process begins", body:"Fike has directors agree each morning on that day's single restoration priority, posted on the war room wall. Early focus: restoring communications and accounts payable/receivable.", quote:"\"What is it you need to survive? What are the five things you need? That becomes a priority for that day.\"", cite:"Nik Puri, SVP Information Technology"}
+    ]
+  },
+  {
+    day: "Following Days & Weeks", sub: "The grinding restoration campaign",
+    events: [
+      {time:"Early on", tag:"response", title:"Tape-to-disk workaround speeds restoration", body:"TNT's tape backups, while safe from the malware, can only restore one system at a time — useless at the scale required. Fike orders new disk drives and hardware to copy tape data over, enabling multiple systems to be restored in parallel.", quote:"\"Our problem was the sheer number of systems, in the thousands, that we had to restore at the same time.\"", cite:"Don Fike"},
+      {time:"Early on", tag:"human", title:"Teams revert to manual, paper-based operations", body:"With no computers, staff rely on muscle memory and PST (primary/secondary/tertiary) planning rooted in founder Fred Smith's military training. Known truck routes are used to route packages by hand; relabeling is done manually where systems can't be rekeyed.", quote:"\"I'm not saying it was by any means perfect. But the operators kicked in their muscle memory to get done what they could do.\"", cite:"Nik Puri"},
+      {time:"Early on", tag:"business", title:"FedEx funds TNT directly — 'the Bank of FedEx'", body:"FedEx transfers operating capital to keep the crippled subsidiary financially alive while systems are rebuilt.", quote:"\"We realized it was going to be the Bank of FedEx that was going to keep this entity alive.\"", cite:"Rob Carter"},
+      {time:"Early weeks", tag:"human", title:"U.S.–Europe friction, then bonding", body:"Beardmore describes the influx of American staff as 'being swamped with troops,' with early friction as some U.S. staff blamed TNT for the attack. Carter runs 7am calls daily to reassure TNT staff worried about job security.", quote:"\"The thought never crossed our minds. I said, 'We'll worry about accountability later; right now, let's rally around fixing it.'\"", cite:"Rob Carter"},
+      {time:"Early weeks", tag:"response", title:"Microsoft helps rebuild Active Directory", body:"Microsoft CEO Satya Nadella personally calls Carter to offer assistance. Rebuilding the Windows Active Directory — which manages every computer, server, and user on the network — becomes the first and hardest step of technical recovery. Servers are reclaimed from a Memphis lab and flown overnight to the U.K."},
+      {time:"~29 consecutive days (peak)", tag:"human", title:"The 'lost summer' takes a toll", body:"Core teams work seven days a week for weeks on end; one person comes to the office 29 days in a row. Burnout sets in — some team members 'tap out' and SVP Nik Puri is bedridden with a high fever.", quote:"\"I had to tell people to go home and sleep... There were no Saturdays and Sundays.\"", cite:"Nik Puri"},
+      {time:"Mid-campaign", tag:"human", title:"Leadership restructures rotations and morale", body:"Memphis–Atherstone trips shift from weekly Monday–Thursday cycles to two-week stints, giving staff more recovery time. Fike organizes team dinners; Carter brings in ice cream and fish-and-chips trucks.", quote:"\"When you're facing a crisis, and you have to work through something together, there's no quicker way to bond.\"", cite:"An IT leader"},
+      {time:"During restoration", tag:"response", title:"Security overhaul begins immediately", body:"TNT's access model is tightened (thousands of admin-level accounts cut down toward FedEx's standard of eight), 900 redundant applications are eliminated, and a new resilient backup architecture is built — cloud, hard-disk, and air-gapped offline copies with full documentation.", quote:"\"Now we have offline capability to restore the essential systems from multiple locations, air gapped, with 100% of the documentation we need.\"", cite:"Kevin Humphries"},
+      {time:"Ongoing", tag:"business", title:"Direct customer outreach", body:"Carter, Sun, and Puri personally meet with CIOs/CISOs of 40 major customers anxious the malware could spread to their own systems, walking them through FedEx's network segmentation and giving concrete restoration dates.", quote:"\"People were a lot more accepting once you could give them a date.\"", cite:"Nik Puri"},
+      {time:"~Month+ later", tag:"business", title:"Visible service damage reported in the press", body:"The Guardian reports TNT warehouses with packages 'piled to the ceilings' (late July); the BBC reports weeks-long delivery delays for medical supplies, computer hardware, and even a wedding dress (early August). Competitors move to capture displaced customers."}
+    ]
+  },
+  {
+    day: "Context", sub: "How NotPetya actually worked — and who else was hit",
+    events: [
+      {time:"Technical", tag:"attack", title:"Disguised as ransomware, built to destroy", body:"Initial $300 Bitcoin ransom notes made the attack look like 2016's Petya ransomware. Analysts soon found no decryption key ever existed — the ransom was a ruse. The malware, dubbed 'NotPetya,' was purely destructive wiper malware."},
+      {time:"Technical", tag:"attack", title:"A self-propagating worm, not a phishing scheme", body:"NotPetya harvested credentials from one infected machine and used them to spread autonomously to other computers — including customers, vendors, and affiliates — without requiring any human to click a malicious link. Where it lacked credentials, it exploited a leaked NSA Windows vulnerability (EternalBlue) and a separate Windows memory flaw to gain access.", quote:"\"It was simply the fastest-propagating piece of malware we've ever seen. By the second you saw it, your data center was already gone.\"", cite:"A cybersecurity expert"},
+      {time:"Origin", tag:"attack", title:"A supply-chain attack via Ukrainian tax software", body:"NotPetya was distributed through a compromised update to a widely used Ukrainian accounting software package, giving attackers access to thousands of computers across Ukraine before the malware was triggered on June 27."},
+      {time:"Global toll", tag:"attack", title:"Collateral damage worldwide, ~$10B in losses", body:"FedEx was not the intended target. The malware paralyzed Ukraine's health ministry, airports, power companies, banks, railways, postal system, and even Chernobyl's radiation monitors, then spread to Merck, Maersk, Saint-Gobain, and dozens of other global companies. U.S. and allied intelligence agencies later attributed the attack to Russia, which denied involvement."},
+      {time:"Insurance gap", tag:"business", title:"Neither FedEx nor TNT carried cyberinsurance", body:"In 2017 only about a quarter of U.S. companies held cyberinsurance, with adoption ranging from 14% in manufacturing to 50%+ in healthcare and tech. Most of FedEx's eventual losses came from lost business rather than direct remediation costs.", quote:"\"There was blood in the water.\"", cite:"Rob Carter"}
+    ]
+  }
+];
+
+const timelineEl = document.getElementById('timeline');
+
+function render(){
+  timelineEl.innerHTML = '';
+  DATA.forEach(group=>{
+    const dayDiv = document.createElement('div');
+    dayDiv.className = 'day-marker';
+    dayDiv.dataset.tags = group.events.map(e=>e.tag).join(',');
+    dayDiv.innerHTML = `<div class="day-dot"></div><span class="day-label">${group.day}</span><span class="day-sub">${group.sub}</span>`;
+    timelineEl.appendChild(dayDiv);
+
+    group.events.forEach(ev=>{
+      const evDiv = document.createElement('div');
+      evDiv.className = 'event';
+      evDiv.dataset.tag = ev.tag;
+      evDiv.innerHTML = `
+        <div class="event-time">${ev.time}</div>
+        <div class="event-dot"></div>
+        <div class="event-card">
+          <span class="event-time-mobile">${ev.time}</span>
+          <div class="event-head">
+            <div class="event-title">${ev.title}</div>
+            <div class="tag-badge">${ev.tag}</div>
+          </div>
+          <div class="event-body">
+            <div>${ev.body}</div>
+            ${ev.quote ? `<div class="event-quote">${ev.quote}<cite>— ${ev.cite}</cite></div>` : ''}
+          </div>
+          <div class="expand-hint">+ expand</div>
+        </div>
+      `;
+      const card = evDiv.querySelector('.event-card');
+      card.addEventListener('click', ()=> card.classList.toggle('open'));
+      timelineEl.appendChild(evDiv);
+    });
+  });
+}
+render();
+
+// filters
+document.getElementById('filters').addEventListener('click', e=>{
+  if(!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  e.target.classList.add('active');
+  const f = e.target.dataset.filter;
+  document.querySelectorAll('.event').forEach(ev=>{
+    ev.classList.toggle('hidden', f!=='all' && ev.dataset.tag !== f);
+  });
+  document.querySelectorAll('.day-marker').forEach(dm=>{
+    const tags = dm.dataset.tags.split(',');
+    dm.classList.toggle('hidden', f!=='all' && !tags.includes(f));
+  });
+});
+
+// fake terminal clock
+function tick(){
+  const d = new Date();
+  document.getElementById('clock').textContent = 'LOG VIEW · ' + d.toLocaleTimeString('en-US',{hour12:false});
+}
+tick(); setInterval(tick,1000);
+</script>
+</body>
+</html>
